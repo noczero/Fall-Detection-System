@@ -248,7 +248,9 @@ void setup(void)
   //and goes into a blocking loop awaiting configuration
 
   Serial.print(F("WiFi connected! IP address: "));
-
+ //Initialize MQTT Connection
+  client.setServer(mqttServerIP, mqttPort);
+  client.setCallback(callback); // callback for incoming message
   mpu_setup();
   pinMode(internalLED, OUTPUT);
   pinMode(redLED, OUTPUT);
@@ -450,5 +452,6 @@ void loop(void)
     Serial.println(message);
     notifLED();
   }
-
+  delay(10);
 }
+
