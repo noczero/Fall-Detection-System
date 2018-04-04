@@ -395,7 +395,7 @@ void callback(char* topic, byte* payload, unsigned int length){
     pesan += (char)payload[i];
 
   }
-     if (topic == "esp/cmd") {
+     //if (topic == "esp/cmd") {
        if(pesan == "ON" ){
           Serial.println("LED ON.. Warning");
           digitalWrite(redLED, HIGH);
@@ -404,7 +404,9 @@ void callback(char* topic, byte* payload, unsigned int length){
           Serial.println("LED OFF.. Safety");
           digitalWrite(redLED,LOW);
        }
-     }
+       Serial.println("ESP/CMD topic arrived");
+       Serial.println(pesan);
+     //}
   Serial.print("Pesan masuk :");
   Serial.println(pesan);
   Serial.println("--------");
