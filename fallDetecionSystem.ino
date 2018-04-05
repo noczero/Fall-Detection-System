@@ -1,47 +1,28 @@
-/* ============================================
-I2Cdev device library code is placed under the MIT license
-Copyright (c) 2012 Jeff Rowberg
-
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
-
-The above copyright notice and this permission notice shall be included in
-all copies or substantial portions of the Software.
-
-THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-THE SOFTWARE.
-===============================================
+/*
+Bismillahirahmanirahim
+To do list :
+1. ESP8266 Wifi Connection (done)
+2. MqTT Connection (done)
+3. MPU
+Wiring to MPU
+------
+GY-521  Wemos
+MPu6050
+board   D1 Pro Mini  Description
+=====   ===========   ==========
+VCC     VCC(5V)       Positive Voltage
+GND     G             Ground / Negative Voltage
+SCL     D1 (GPIO-05)  I2C Clock
+SDA     D2 (GPIO-04)  I2C data
+XDA     not used
+XCL     not used
+AD0     not used
+INT     D8 (GPIO-15)  Interrupt Pin
 */
 
-/* This driver reads quaternion data from the MPU6060 and sends
-   Open Sound Control messages.
-
-  GY-521  NodeMCU
-  MPU6050 devkit 1.0
-  board   Lolin         Description
-  ======= ==========    ====================================================
-  VCC     VU (5V USB)   Not available on all boards so use 3.3V if needed.
-  GND     G             Ground
-  SCL     D1 (GPIO05)   I2C clock
-  SDA     D2 (GPIO04)   I2C data
-  XDA     not connected
-  XCL     not connected
-  AD0     not connected
-  INT     D8 (GPIO15)   Interrupt pin
-
-*/
-
-
+// ESP Library
 #include <ESP8266WiFi.h>
+// MQTT Library
 #include <PubSubClient.h>
 
 // LED Define
@@ -56,19 +37,24 @@ const char* wifiPassword = "gsglantaidua";
 const char* mqttServerIP = "192.168.1.2";
 const int mqttPort = 1883;
 
+// Define topic MQTT
+ char* commandTopic = "fall/zeroDevice-1/command"; // subscribe
+ char* yprTopic = "fall/zeroDevice-1/ypr"; // publish
+ char* accTopic = "fall/zeroDevice-1/acc"; // publish
+
 // delay milis
 int valueRandom = 0;
 int lastMsg = 0;
 // untuk pesan message
+String dataAccelero;
+String dataYPR;
 String temp_str;
 String hum_str;
 char temp[50];
 char hum[50];
 
-WiFiClient myESP;
+WiFiClient myESP; // myESP become WIFI
 PubSubClient client(myESP);
-
-     //https://github.com/tzapu/WiFiManager
 
 // I2Cdev and MPU6050 must be installed as libraries, or else the .cpp/.h files
 // for both classes must be in the include path of your project
@@ -147,7 +133,7 @@ float ypr[3];           // [yaw, pitch, roll]   yaw/pitch/roll container and gra
 // components with gravity removed and adjusted for the world frame of
 // reference (yaw is relative to initial orientation, since no magnetometer
 // is present in this case). Could be quite handy in some cases.
-//#define OUTPUT_READABLE_WORLDACCEL
+#define OUTPUT_READABLE_WORLDACCEL
 
 // uncomment "OUTPUT_TEAPOT_OSC" if you want output that matches the
 // format used for the InvenSense teapot demo
@@ -233,19 +219,10 @@ void wifiSetup(){
   Serial.print("IP Local "); Serial.println(WiFi.localIP());
 }
 
-void setup(void)
-{
+void setup(){
   Serial.begin(57600);
    wifiSetup();
-  //WiFiManager
-  //Local intialization. Once its business is done, there is no need to keep it around
-
-  //reset saved settings
-  //wifiManager.resetSettings();
-
-  //fetches ssid and pass from eeprom and tries to connect
-  //if it does not connect it starts an access point with the specified name
-  //and goes into a blocking loop awaiting configuration
+ 
 
   Serial.print(F("WiFi connected! IP address: "));
  //Initialize MQTT Connection
@@ -256,8 +233,15 @@ void setup(void)
   pinMode(redLED, OUTPUT);
 }
 
-void mpu_loop()
-{
+char dataPublish[50];
+void publishMQTT(char* topics, String data){
+   
+   data.toCharArray(dataPublish, data.length() + 1);
+    
+   client.publish(topics, dataPublish);
+}
+
+void mpu_loop(){
   // if programming failed, don't try to do anything
   if (!dmpReady) return;
 
@@ -326,6 +310,15 @@ void mpu_loop()
     Serial.print(ypr[1] * 180/M_PI);
     Serial.print("\t");
     Serial.println(ypr[2] * 180/M_PI);
+
+    // Send to Broker
+    int yaw = ypr[0] * 180/M_PI;
+    int pitch = ypr[1] * 180/M_PI;
+    int roll = ypr[2] * 180/M_PI;
+    
+    dataYPR = String(yaw)+","+String(pitch)+","+String(roll);
+    publishMQTT(yprTopic,dataYPR);
+
 #endif
 
 #ifdef OUTPUT_READABLE_REALACCEL
@@ -356,6 +349,10 @@ void mpu_loop()
     Serial.print(aaWorld.y);
     Serial.print("\t");
     Serial.println(aaWorld.z);
+
+    // Send to Broker
+    dataAccelero = String(aaWorld.x)+","+String(aaWorld.y)+","+String(aaWorld.z);
+    publishMQTT(accTopic,dataAccelero);
 #endif
   }
 }
@@ -377,9 +374,10 @@ void reconnect(){
       Serial.println("Try to connect...");
     }
   }
-  client.publish("esp/test", "Reconnecting");
-  client.subscribe("esp/test");  
-  client.subscribe("esp/cmd");
+  client.publish(accTopic, "Reconnecting"); // acc
+  client.publish(yprTopic, "Reconnecting"); //  ypr
+
+  client.subscribe(commandTopic);  
 
 }
 
@@ -424,36 +422,30 @@ void redLEDHL(){
   digitalWrite(redLED, LOW);
 }
 
-/**************************************************************************/
-/*
-    Arduino loop function, called once 'setup' is complete (your own code
-    should go here)
-*/
-/**************************************************************************/
-void loop(void)
-{
+
+void loop(){
    if (!client.connected()){
     reconnect();
   }
     mpu_loop();
 
-  valueRandom = random(10,100);
+ // valueRandom = random(10,100);
   client.loop(); //looping forever the client
   
   // publish every 2 secondss
-  long now = millis(); 
-  if (now-lastMsg > 2000){
-    lastMsg = now;
-  
-    // value convert to string
-    temp_str = String(valueRandom); 
-    temp_str.toCharArray(temp, temp_str.length() + 1);
-    
-    client.publish("esp/test", temp); //topic esp/test message : temp (string)
-    String message = "Publish message to server : " + String(valueRandom);
-    Serial.println(message);
-    notifLED();
-  }
+//  long now = millis(); 
+//  if (now-lastMsg > 2000){
+//    lastMsg = now;
+//  
+//    // value convert to string
+//    temp_str = String(valueRandom); 
+//    temp_str.toCharArray(temp, temp_str.length() + 1);
+//    
+//    //client.publish("esp/test", temp); //topic esp/test message : temp (string)
+//    String message = "Publish message to server : " + String(valueRandom);
+//    Serial.println(message);
+//    notifLED();
+//  }
   delay(10);
 }
 
